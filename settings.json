@@ -17,9 +17,11 @@
     "debugLogging": false,
     "altitude": 0, // feet
     "humidity": 0.5,  // percent (0 - 1)
-    "temperature": 60, // fahrenheit 
+    "temperature": 70, // fahrenheit 
     "airDensity": 1.225, // kg/m^3
-    "teeDistanceInFeet": 7 // distance from R10 to ball in feet
+    "teeDistanceInFeet": 2, // distance from R10 to ball in feet
+    "X-Api-Key":   "151c61ec23fc4a68a83d9ce1933a860f",
+    "X-CsrfToken": "zGHu1jRKQ5V2RvP1fEqUMPKUB5YOj4WpvNsRNnAb9XeyNbxPLei17AcVnWhDyR0x"
   },
   "putting": {
     "enabled": false,

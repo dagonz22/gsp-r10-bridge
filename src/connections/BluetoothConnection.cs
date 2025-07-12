@@ -4,6 +4,11 @@ using LaunchMonitor.Proto;
 using gspro_r10.bluetooth;
 using Microsoft.Extensions.Configuration;
 using System.Text;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Threading.Tasks;
+
 
 namespace gspro_r10
 {
@@ -11,6 +16,7 @@ namespace gspro_r10
   {
     private static readonly double METERS_PER_S_TO_MILES_PER_HOUR = 2.2369;
     private static readonly float FEET_TO_METERS = 1 / 3.281f;
+    private static readonly HttpClient _httpClient = new HttpClient();
     private bool disposedValue;
 
     public ConnectionManager ConnectionManager { get; }
@@ -112,6 +118,10 @@ namespace gspro_r10
       float airDensity = float.Parse(Configuration["airDensity"] ?? "1");
       float teeDistanceInFeet = float.Parse(Configuration["teeDistanceInFeet"] ?? "7");
       float teeRange = teeDistanceInFeet * FEET_TO_METERS;
+      string apiKey = Configuration["X-Api-Key"] ?? "";
+      string csrfToken = Configuration["X-CsrfToken"] ?? "";
+      BluetoothLogger.Info("API Key: " + apiKey);
+      BluetoothLogger.Info("CsrfToken: " + csrfToken);
 
       lm.ShotConfig(temperature, humidity, altitude, airDensity, teeRange);
 
@@ -177,7 +187,7 @@ namespace gspro_r10
       }
     }
 
-    public void LogMetrics(Metrics? metrics)
+    public async Task LogMetrics(Metrics? metrics)
     {
       if (metrics == null)
       {
@@ -219,6 +229,35 @@ namespace gspro_r10
         sb.Append($" {"",-20} {"",-18} │");
         sb.AppendLine($" {"Normal/Practice:",-20} {metrics.ShotType,-17}");
         BluetoothLogger.Info(sb.ToString());
+        
+        StringBuilder jsonSb = new StringBuilder();
+        jsonSb.AppendLine("{");
+        jsonSb.AppendLine("  \"sensor_data\": {");
+        jsonSb.AppendLine($"    \"Club Face\": {metrics.ClubMetrics?.ClubAngleFace ?? 0},");
+        jsonSb.AppendLine($"    \"HLA\": {metrics.BallMetrics?.LaunchDirection ?? 0},");
+
+        double spinAxisRad = (metrics.BallMetrics?.SpinAxis ?? 0) * Math.PI / 180;
+        double totalSpin = metrics.BallMetrics?.TotalSpin ?? 0;
+        double sideSpin = totalSpin * Math.Sin(spinAxisRad);
+        double backSpin = totalSpin * Math.Cos(spinAxisRad);
+        double smashFactor = (metrics.BallMetrics?.BallSpeed ?? 0) / (metrics.ClubMetrics?.ClubHeadSpeed ?? 0);
+
+        jsonSb.AppendLine($"    \"Sidespin\": {sideSpin},");
+        // If you have a SmashFactor calculation, insert it here, otherwise default to 0
+        jsonSb.AppendLine($"    \"Smash Factor\": {smashFactor},");
+        jsonSb.AppendLine($"    \"VLA\": {metrics.BallMetrics?.LaunchAngle ?? 0},");
+        jsonSb.AppendLine($"    \"Attack Angle\": {metrics.ClubMetrics?.AttackAngle ?? 0},");
+        jsonSb.AppendLine($"    \"Ball Speed\": {(metrics.BallMetrics?.BallSpeed ?? 0) * METERS_PER_S_TO_MILES_PER_HOUR},");
+        jsonSb.AppendLine($"    \"Face to Path\": {(metrics.ClubMetrics != null ? metrics.ClubMetrics.ClubAngleFace - metrics.ClubMetrics.ClubAnglePath : 0)},");
+        jsonSb.AppendLine($"    \"Club Speed\": {(metrics.ClubMetrics?.ClubHeadSpeed ?? 0) * METERS_PER_S_TO_MILES_PER_HOUR},");
+        jsonSb.AppendLine($"    \"Spin Axis\": {(metrics.BallMetrics?.SpinAxis ?? 0)},");
+        jsonSb.AppendLine($"    \"Backspin\": {backSpin}");
+        jsonSb.AppendLine("  },");
+        // Replace with your actual club identifier
+        jsonSb.AppendLine("  \"club\": \"string\"");
+        jsonSb.AppendLine("}");
+        BluetoothLogger.Info(jsonSb.ToString());
+        await PostShotJsonAsync(jsonSb.ToString(), metrics);
 
       }
       catch (Exception e)
@@ -227,6 +266,40 @@ namespace gspro_r10
       }
 
     }
+    private async Task PostShotJsonAsync(string json, Metrics metrics)
+    {
+      try
+      {
+        // 1) Wrap JSON
+        var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+        // 2) Build request
+        var request = new HttpRequestMessage(HttpMethod.Post,
+          "https://dev-api-app.fairwaytec.com/api/shots/create/")
+        {
+          Content = content
+        };
+
+        // 3) Required headers
+        request.Headers.Accept.Add(
+          new MediaTypeWithQualityHeaderValue("application/json"));
+        request.Headers.Add("X-API-Key", Configuration["X-Api-Key"]);
+        request.Headers.Add("X-CSRFTOKEN", Configuration["X-CsrfToken"]);
+
+        // 4) Send & log
+        var resp = await _httpClient.SendAsync(request);
+        var body = await resp.Content.ReadAsStringAsync();
+        if (resp.IsSuccessStatusCode)
+          BluetoothLogger.Info($"Posted shot #{metrics.ShotId}: {resp.StatusCode}");
+        else
+          BluetoothLogger.Error($"POST failed {resp.StatusCode}: {body}");
+      }
+      catch (Exception ex)
+      {
+        BluetoothLogger.Error($"Error posting shot: {ex.Message}");
+      }
+    }
+
 
     public void Dispose()
     {
