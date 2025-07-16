@@ -23,6 +23,7 @@ namespace gspro_r10
       
       Console.Title = "GSP-R10 Connect";
       BaseLogger.LogMessage("GSP - R10 Bridge starting. Press enter key to close", "Main");
+      BaseLogger.LogMessage("hey i made it to the start look at me", "Main");
       ConnectionManager manager = new ConnectionManager(configuration);
       Console.ReadLine();
       BaseLogger.LogMessage("Shutting down...", "Main");

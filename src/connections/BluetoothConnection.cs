@@ -241,6 +241,9 @@ namespace gspro_r10
         double sideSpin = totalSpin * Math.Sin(spinAxisRad);
         double backSpin = totalSpin * Math.Cos(spinAxisRad);
         double smashFactor = (metrics.BallMetrics?.BallSpeed ?? 0) / (metrics.ClubMetrics?.ClubHeadSpeed ?? 0);
+        if(smashFactor >= 10000){
+          smashFactor = 0; //in the case where no clubheadspeed is captured, smashFactor is set to 0 or else the value is infinity
+        }
 
         jsonSb.AppendLine($"    \"Sidespin\": {sideSpin},");
         // If you have a SmashFactor calculation, insert it here, otherwise default to 0

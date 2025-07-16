@@ -28,7 +28,7 @@ namespace gspro_r10
 
     public ConnectionManager(IConfigurationRoot configuration)
     {
-      OpenConnectClient = new OpenConnectClient(this, configuration.GetSection("openConnect"));
+      OpenConnectClient = new OpenConnectClient(this);
       OpenConnectClient.ConnectAsync();
 
       if (bool.Parse(configuration.GetSection("r10E6Server")["enabled"] ?? "false"))
